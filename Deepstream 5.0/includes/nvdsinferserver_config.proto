@@ -1,0 +1,349 @@
+/**
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * NVIDIA Corporation and its licensors retain all intellectual property
+ * and proprietary rights in and to this software, related documentation
+ * and any modifications thereto.  Any use, reproduction, disclosure or
+ * distribution of this software and related documentation without an express
+ * license agreement from NVIDIA Corporation is strictly prohibited.
+ */
+
+syntax = "proto3";
+package nvdsinferserver.config;
+
+enum MediaFormat {
+  MEDIA_FORMAT_NONE = 0;
+  IMAGE_FORMAT_RGB = 1;
+  IMAGE_FORMAT_BGR = 2;
+  IMAGE_FORMAT_GRAY = 3;
+}
+
+enum TensorOrder {
+  TENSOR_ORDER_NONE = 0;
+  TENSOR_ORDER_LINEAR = 1;
+  TENSOR_ORDER_NHWC = 2;
+}
+
+enum TensorDataType {
+  TENSOR_DT_NONE = 0;
+  TENSOR_DT_FP32 = 1;
+  TENSOR_DT_FP16 = 2;
+  TENSOR_DT_INT8 = 3;
+  TENSOR_DT_INT16 = 4;
+  TENSOR_DT_INT32 = 5;
+  TENSOR_DT_UINT8 = 6;
+  TENSOR_DT_UINT16 = 7;
+  TENSOR_DT_UINT32 = 8;
+}
+
+enum FrameScalingHW {
+  FRAME_SCALING_HW_DEFAULT = 0;
+  FRAME_SCALING_HW_GPU = 1;
+  FRAME_SCALING_HW_VIC = 2;
+}
+
+/** Custom lib for preload */
+message CustomLib {
+  /** Path point to the custom library */
+  string path = 1;
+}
+
+/** preprocessing settings */
+message PreProcessParams {
+  /** Input data normalization settings */
+  message ScaleNormalize
+  {
+    /** Normalization factor to scale the input pixels with. */
+    float scale_factor = 1;
+    /** Per channel offsets for mean subtraction. This is an alternative to
+     * the mean image file. The number of offsets in the array should be
+     * exactly equalto the number of input channels.
+     */
+    repeated float channel_offsets = 2;
+    /** Path to the mean image file (PPM format). Resolution of the file
+     * should be equal to the network input resolution.
+     */
+    string mean_file = 3;
+  }
+  /** Network input format */
+  MediaFormat network_format = 1;
+  /** Network input tensor order */
+  TensorOrder tensor_order = 2;
+  /** preprocessing data set to network tensor name */
+  string tensor_name = 3;
+  /** Indicating if aspect ratio should be maintained when scaling to
+   * network resolution. Right/bottom areas will be filled with black areas. */
+  int32 maintain_aspect_ratio = 4;
+  /** Compute hardware to use for scaling frames / objects. */
+  FrameScalingHW frame_scaling_hw = 5;
+  /** Interpolation filter to use while scaling. Refer to
+   * NvBufSurfTransform_Inter for supported filter values. */
+  uint32 frame_scaling_filter = 6;
+  /** Preprocessing methods */
+  oneof preprocess_method {
+    /** usual scaling normalization for images */
+    ScaleNormalize normalize = 7;
+  }
+}
+
+/** Deepstream Detection settings */
+message DetectionParams {
+  /** non-maximum-suppression cluster method */
+  message Nms
+  {
+    /** detection score less this threshold would be rejected */
+    float confidence_threshold = 1;
+    /** IOU threshold */
+    float iou_threshold = 2;
+    /** top kth detection results to keep after nms. 0), keep all */
+    int32 topk = 3;
+  }
+
+  /** DBScan object clustering */
+  message DbScan {
+    /** Bounding box detection threshold. */
+    float pre_threshold = 1;
+    // float post_threshold = 2;
+    /** Epsilon to control merging of overlapping boxes */
+    float eps = 3;
+    /** Minimum boxes in a cluster to be considered an object */
+    int32 min_boxes = 4;
+    /** Minimum score in a cluster for it to be considered as an object */
+    float min_score = 5;
+  }
+
+  /** cluster method based on grouping rectangles*/
+  message GroupRectangle {
+    /** detection score less this threshold would be rejected */
+    float confidence_threshold = 1;
+    /** how many bbox can be clustered together */
+    int32 group_threshold = 2;
+    /** Epsilon to control merging of overlapping boxes */
+    float eps = 3;
+  }
+
+  /** simple cluster method for confidence filter */
+  message SimpleCluster
+  {
+    /** detection score less this threshold would be rejected */
+    float threshold = 1;
+  }
+
+  /** specific parameters controled per class*/
+  message PerClassParams {
+    /** pre-threshold used for filter out confidence less than the value */
+    float pre_threshold = 1;
+  }
+
+  /** Number of classes detected by a detector network. */
+  int32 num_detected_classes = 1;
+  /** Per class detection parameters. key-value is for
+   * <class_id:class_parameter> */
+  map<int32, PerClassParams> per_class_params = 2;
+  /** Name of the custom bounding box function in the custom library. */
+  string custom_parse_bbox_func = 3;
+
+  /** cluster methods for bbox, choose one only */
+  oneof clustering_policy {
+    /** non-maximum-suppression, reserved, not supported yet */
+    Nms nms = 4;
+    /** DbScan clustering parameters */
+    DbScan dbscan = 5;
+    /** grouping rectagules */
+    GroupRectangle group_rectangle = 6;
+    /** simple threshold filter */
+    SimpleCluster simple_cluster = 7;
+  }
+}
+
+/** Deepstream Classifciation settings */
+message ClassificationParams {
+  /** classifciation threshold */
+  float threshold = 1;
+  /** custom function for classification parsing */
+  string custom_parse_classifier_func = 2;
+}
+
+/** Deepstream segmentation settings */
+message SegmentationParams {
+  /** reserved field */
+  float threshold = 1;
+}
+
+/** Other Network settings, need application to do postprocessing */
+message OtherNetworkParams {
+  /** reserved field */
+  string type_name = 1;
+}
+
+/** TRTIS classifcation settings */
+message TrtIsClassifyParams
+{
+  /** top k classification results */
+  uint32 topk = 1;
+  /** classifciation threshold */
+  float threshold = 2;
+  /** [optional] specify which output tensor is used for triton classification.*/
+  string tensor_name = 3;
+}
+
+/** Post-processing settings */
+message PostProcessParams {
+  /** label file path. It relative to config file path if value is not
+   * absoluate path
+   */
+  string labelfile_path = 1;
+
+  /** post-process can only have one of the following types*/
+  oneof process_type
+  {
+    /** deepstream detection parameters */
+    DetectionParams detection = 2;
+    /** deepstream classification parameters */
+    ClassificationParams classification = 3;
+    /** deepstream segmentation parameters */
+    SegmentationParams segmentation = 4;
+    /** deepstream other postprocessing parameters */
+    OtherNetworkParams other = 5;
+    /* TRT-IS classification parameters */
+    TrtIsClassifyParams trtis_classification = 6;
+  }
+}
+
+/** Network Input layer information */
+message InputLayer {
+  /** input tensor name, optional*/
+  string name = 1;
+  /** fixed inference shape, only required when backend has wildcard shape */
+  repeated int32 dims = 2;
+  /** tensor data type, optional. default TENSOR_DT_NONE */
+  TensorDataType data_type = 3;
+}
+
+/** Network Onput layer information */
+message OutputLayer {
+  /** output tensor name */
+  string name = 1;
+}
+
+/** TRTIS inference backend parameters */
+message TrtISParams {
+  /** TRTIS models repo settings */
+  message ModelRepo
+  {
+    /** root directory for all models
+     * All models should set same @a root value */
+    string root = 1;
+    /** log verbose level, the larger the more logs output
+     *  (0): ERROR;
+     *  (1): WARNING;
+     *  (2): INFO
+     *  (3+): VERBOSE Level
+     */
+    uint32 log_level = 2;
+
+    /** enable strict model config
+     * true: config.pbtxt must exsit.
+     * false: trtis try to figure model's config file, it may cause failure on
+     *        different input/output dims.
+     */
+    bool strict_model_config = 3;
+    /** tensorflow gpu memory fraction, default 0.0 */
+    float tf_gpu_memory_fraction = 4;
+    /** tensorflow soft placement, allowed by default */
+    bool tf_disable_soft_placement = 5;
+  }
+
+  /** trt-is model name */
+  string model_name = 1;
+  /** model version, -1 is for latest version, required */
+  int64 version = 2;
+
+  oneof server {
+    /** trt-is server model repo, all models must have same @a model_repo */
+    ModelRepo model_repo = 3;
+  }
+}
+
+/** Network LSTM Parameters */
+message LstmParams {
+  /** init constant value for lstm input tensors, usually zero or one */
+  message InitConst {
+    /** const value */
+    float value = 1;
+  }
+  /** LSTM loop information */
+  message LstmLoop {
+    /** input tensor name */
+    string input = 1;
+    /** output tensor name */
+    string output = 2;
+    /** initialize input tensor for first frame */
+    oneof init_state {
+      /** init const value, default is zero */
+      InitConst init_const = 3;
+    }
+    /** enable if need keep lstm output tensor data for application output
+     * parsing, it's disabled by default */
+    bool keep_output = 4;
+  }
+  repeated LstmLoop loops = 1;
+}
+
+/** Network backend Settings */
+message BackendParams {
+  /** input tensors settings, optional */
+  repeated InputLayer inputs = 1;
+  /** outputs tensor settings, optional */
+  repeated OutputLayer outputs = 2;
+
+  /** inference framework */
+  oneof infer_framework
+  {
+    /** TRT-IS inference framework */
+    TrtISParams trt_is = 3;
+  }
+}
+
+/** extrac controls */
+message ExtraControl {
+  /** enable if need copy input tensor data for application output parsing,
+   * it's disabled by default */
+  bool copy_input_to_host_buffers = 1;
+  /** defined how many buffers allocated for output tensors in the pool.
+   * Optional, default is 2, the value can be in range [2:6] */
+  int32 output_buffer_pool_size = 2;
+}
+
+/** Inference configuration */
+message InferenceConfig {
+  /** unique id, larger than 0, required for multiple models inference */
+  uint32 unique_id = 1;
+  /** gpu id settings. Optional. support single gpu only at this time
+   * default values [0] */
+  repeated int32 gpu_ids = 2;
+  /** max batch size. Required, can be reset by plugin */
+  uint32 max_batch_size = 3;
+  /** inference backend parameters. required */
+  BackendParams backend = 4;
+  /** preprocessing for tensors, required */
+  PreProcessParams preprocess = 5;
+  /** postprocessing for all tensor data, required */
+  PostProcessParams postprocess = 6;
+  /** Custom libs for tensor output parsing or preload, optional */
+  CustomLib custom_lib = 7;
+
+  /** advanced controls as optional */
+  oneof advanced
+  {
+    /** extrac controls */
+    ExtraControl extra = 8;
+  }
+
+  /** LSTM controller */
+  oneof lstm_control {
+    /** LSTM parameters */
+    LstmParams lstm = 9;
+  }
+}
+
