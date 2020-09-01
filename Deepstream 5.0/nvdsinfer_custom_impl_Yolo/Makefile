@@ -36,10 +36,9 @@ LFLAGS:= -shared -Wl,--start-group $(LIBS) -Wl,--end-group
 INCS:= $(wildcard *.h) 
 SRCFILES:= nvdsinfer_yolo_engine.cpp \
            nvdsparsebbox_Yolo.cpp   \
-           yoloPlugins.cpp    \
            trt_utils.cpp              \
            yolo.cpp              \
-           kernels.cu             
+           yoloPlugins.cpp
 TARGET_LIB:= libnvdsinfer_custom_impl_Yolo.so
 
 TARGET_OBJS:= $(SRCFILES:.cpp=.o)
