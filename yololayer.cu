@@ -212,7 +212,7 @@ namespace nvinfer1
             numElem = yolo.width*yolo.height*batchSize;
             if (numElem < mThreadCount)
                 mThreadCount = numElem;
-            CalDetection<<< (yolo.width*yolo.height*batchSize + mThreadCount - 1) / mThreadCount, mThreadCount>>>
+            CalDetection<<< (yolo.width*yolo.height*batchSize + mThreadCount - 1) / mThreadCount, mThreadCount, 0, stream>>>
                 (inputs[i], output, numElem, yolo.width, yolo.height, (float *)mAnchor[i], mClassCount, outputElem);
         }
 

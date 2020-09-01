@@ -127,7 +127,7 @@ namespace nvinfer1
     void HardSwishPlugin::forwardGpu(const float *const * inputs, float* output, cudaStream_t stream, int batchSize) {
 
         int numElem = batchSize * mInputSize;
-        HardSwishKer<<<(numElem + mThreadCount - 1) / mThreadCount, mThreadCount>>>
+        HardSwishKer<<<(numElem + mThreadCount - 1) / mThreadCount, mThreadCount, 0, stream>>>
             (inputs[0], output, numElem);
     }
 
