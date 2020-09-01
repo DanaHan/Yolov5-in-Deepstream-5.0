@@ -38,5 +38,7 @@ We can get libnvdsinfer_custom_impl_Yolo.so here.
 After build yolov5 plugin, modify 'config_infer_primary_yoloV5.txt' in Deepstream 5.0 Directory.
 
 -- a).In Line 58. "parse-bbox-func-name=NvDsInferParseCustomYoloV5"   // This is the bbox parse function name.
+
 -- b).In Line 59. "custom-lib-path"   // This is DeepStream plugin path.
+
 -- c).In Line 56. Comment "#cluster-mode=2". Becase we use custom NMS function.
