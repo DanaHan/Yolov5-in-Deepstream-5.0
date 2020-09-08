@@ -3,6 +3,10 @@ This Repos contains how to run yolov5 model in DeepStream 5.0
 
 # 1.Geneate yolov5 engine model 
 We can use https://github.com/wang-xinyu/tensorrtx yolov5 to generate engine model
+
+### Important Note:
+   You should replace yololayer.cu and hardswish.cu file in tensorrtx/yolov5
+
 ### How to Run, yolov5s as example
 -- a). generate yolov5s.wts from pytorch with yolov5s.pt
 ```
