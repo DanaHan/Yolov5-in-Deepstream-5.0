@@ -46,3 +46,10 @@ After build yolov5 plugin, modify 'config_infer_primary_yoloV5.txt' in Deepstrea
 -- b).In Line 59. "custom-lib-path"   // This is DeepStream plugin path.
 
 -- c).In Line 56. Comment "#cluster-mode=2". Becase we use custom NMS function.
+
+# 4. How to run it
+
+Running the application as
+```
+LD_PRELOAD=./libcustomOp.so deepstream-app -c <app-config>
+```
