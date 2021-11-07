@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -71,7 +71,7 @@ YoloLayerV3::YoloLayerV3 (
 
 nvinfer1::Dims
 YoloLayerV3::getOutputDimensions(
-    int index, const nvinfer1::Dims* inputs, int nbInputDims)
+    int index, const nvinfer1::Dims* inputs, int nbInputDims) noexcept
 {
     assert(index == 0);
     assert(nbInputDims == 1);
@@ -79,25 +79,25 @@ YoloLayerV3::getOutputDimensions(
 }
 
 bool YoloLayerV3::supportsFormat (
-    nvinfer1::DataType type, nvinfer1::PluginFormat format) const {
+    nvinfer1::DataType type, nvinfer1::PluginFormat format) const noexcept {
     return (type == nvinfer1::DataType::kFLOAT &&
-            format == nvinfer1::PluginFormat::kNCHW);
+            format == nvinfer1::PluginFormat::kLINEAR);
 }
 
 void
 YoloLayerV3::configureWithFormat (
     const nvinfer1::Dims* inputDims, int nbInputs,
     const nvinfer1::Dims* outputDims, int nbOutputs,
-    nvinfer1::DataType type, nvinfer1::PluginFormat format, int maxBatchSize)
+    nvinfer1::DataType type, nvinfer1::PluginFormat format, int maxBatchSize) noexcept
 {
     assert(nbInputs == 1);
-    assert (format == nvinfer1::PluginFormat::kNCHW);
+    assert (format == nvinfer1::PluginFormat::kLINEAR);
     assert(inputDims != nullptr);
 }
 
 int YoloLayerV3::enqueue(
-    int batchSize, const void* const* inputs, void** outputs, void* workspace,
-    cudaStream_t stream)
+    int batchSize, void const* const* inputs, void* const* outputs, void* workspace,
+    cudaStream_t stream) noexcept
 {
     CHECK(cudaYoloLayerV3(
               inputs[0], outputs[0], batchSize, m_GridSize, m_NumClasses, m_NumBoxes,
@@ -105,12 +105,12 @@ int YoloLayerV3::enqueue(
     return 0;
 }
 
-size_t YoloLayerV3::getSerializationSize() const
+size_t YoloLayerV3::getSerializationSize() const noexcept
 {
     return sizeof(m_NumBoxes) + sizeof(m_NumClasses) + sizeof(m_GridSize) + sizeof(m_OutputSize);
 }
 
-void YoloLayerV3::serialize(void* buffer) const
+void YoloLayerV3::serialize(void* buffer) const noexcept
 {
     char *d = static_cast<char*>(buffer);
     write(d, m_NumBoxes);
@@ -119,7 +119,7 @@ void YoloLayerV3::serialize(void* buffer) const
     write(d, m_OutputSize);
 }
 
-nvinfer1::IPluginV2* YoloLayerV3::clone() const
+nvinfer1::IPluginV2* YoloLayerV3::clone() const noexcept
 {
     return new YoloLayerV3 (m_NumBoxes, m_NumClasses, m_GridSize);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -115,22 +115,6 @@ std::string dimsToString(const nvinfer1::Dims d)
     s << std::setw(4) << d.d[d.nbDims - 1];
 
     return s.str();
-}
-
-void displayDimType(const nvinfer1::Dims d)
-{
-    std::cout << "(" << d.nbDims << ") ";
-    for (int i = 0; i < d.nbDims; ++i)
-    {
-        switch (d.type[i])
-        {
-        case nvinfer1::DimensionType::kSPATIAL: std::cout << "kSPATIAL "; break;
-        case nvinfer1::DimensionType::kCHANNEL: std::cout << "kCHANNEL "; break;
-        case nvinfer1::DimensionType::kINDEX: std::cout << "kINDEX "; break;
-        case nvinfer1::DimensionType::kSEQUENCE: std::cout << "kSEQUENCE "; break;
-        }
-    }
-    std::cout << std::endl;
 }
 
 int getNumChannels(nvinfer1::ITensor* t)
@@ -379,9 +363,8 @@ nvinfer1::ILayer* netAddUpsample(int layerIdx, std::map<std::string, std::string
     int stride = std::stoi(block.at("stride"));
     // add pre multiply matrix as a constant
     nvinfer1::Dims preDims{3,
-                           {1, stride * h, w},
-                           {nvinfer1::DimensionType::kCHANNEL, nvinfer1::DimensionType::kSPATIAL,
-                            nvinfer1::DimensionType::kSPATIAL}};
+                           {1, stride * h, w}};
+
     int size = stride * h * w;
     nvinfer1::Weights preMul{nvinfer1::DataType::kFLOAT, nullptr, size};
     float* preWt = new float[size];
@@ -413,9 +396,8 @@ nvinfer1::ILayer* netAddUpsample(int layerIdx, std::map<std::string, std::string
     preM->setName(preLayerName.c_str());
     // add post multiply matrix as a constant
     nvinfer1::Dims postDims{3,
-                            {1, h, stride * w},
-                            {nvinfer1::DimensionType::kCHANNEL, nvinfer1::DimensionType::kSPATIAL,
-                             nvinfer1::DimensionType::kSPATIAL}};
+                            {1, h, stride * w}};
+
     size = stride * h * w;
     nvinfer1::Weights postMul{nvinfer1::DataType::kFLOAT, nullptr, size};
     float* postWt = new float[size];
