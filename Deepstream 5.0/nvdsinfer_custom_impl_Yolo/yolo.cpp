@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -37,9 +37,7 @@ Yolo::Yolo(const NetworkInfo& networkInfo)
       m_InputW(0),
       m_InputC(0),
       m_InputSize(0)
-{
-    std::cout << "Build Yolo engine on " << networkInfo.configFilePath << std::endl;
-}
+{}
 
 Yolo::~Yolo()
 {
@@ -53,16 +51,16 @@ nvinfer1::ICudaEngine *Yolo::createEngine (nvinfer1::IBuilder* builder)
     std::vector<float> weights = loadWeights(m_WtsFilePath, m_NetworkType);
     std::vector<nvinfer1::Weights> trtWeights;
 
-    nvinfer1::INetworkDefinition *network = builder->createNetwork();
+    nvinfer1::INetworkDefinition *network = builder->createNetworkV2(0);
     if (parseModel(*network) != NVDSINFER_SUCCESS) {
-        std::cout << "Parse Model Failed ..." << std::endl;
         network->destroy();
         return nullptr;
     }
 
     // Build the engine
     std::cout << "Building the TensorRT Engine..." << std::endl;
-    nvinfer1::ICudaEngine * engine = builder->buildCudaEngine(*network);
+    nvinfer1::IBuilderConfig *config = builder->createBuilderConfig();
+    nvinfer1::ICudaEngine * engine = builder->buildEngineWithConfig(*network, *config);
     if (engine) {
         std::cout << "Building complete!" << std::endl;
     } else {
@@ -71,13 +69,13 @@ nvinfer1::ICudaEngine *Yolo::createEngine (nvinfer1::IBuilder* builder)
 
     // destroy
     network->destroy();
+    delete config;
     return engine;
 }
 
 NvDsInferStatus Yolo::parseModel(nvinfer1::INetworkDefinition& network) {
     destroyNetworkUtils();
 
-    std::cout << "ParseConfigFile:" << m_ConfigFilePath << std::endl;
     m_ConfigBlocks = parseConfigFile(m_ConfigFilePath);
     parseConfigBlocks();
 
@@ -102,7 +100,7 @@ NvDsInferStatus Yolo::buildYoloNetwork(
 
     nvinfer1::ITensor* data =
         network.addInput(m_InputBlobName.c_str(), nvinfer1::DataType::kFLOAT,
-            nvinfer1::DimsCHW{static_cast<int>(m_InputC),
+            nvinfer1::Dims3{static_cast<int>(m_InputC),
                 static_cast<int>(m_InputH), static_cast<int>(m_InputW)});
     assert(data != nullptr && data->getDimensions().nbDims > 0);
 
@@ -194,27 +192,41 @@ NvDsInferStatus Yolo::buildYoloNetwork(
             printLayerInfo(layerIndex, "yolo", inputVol, outputVol, std::to_string(weightPtr));
             ++outputTensorCount;
         } else if (m_ConfigBlocks.at(i).at("type") == "region") {
+            std::string layerName = "region_" + std::to_string(i);
+
             nvinfer1::Dims prevTensorDims = previous->getDimensions();
             assert(prevTensorDims.d[1] == prevTensorDims.d[2]);
+
             TensorInfo& curRegionTensor = m_OutputTensors.at(outputTensorCount);
             curRegionTensor.gridSize = prevTensorDims.d[1];
             curRegionTensor.stride = m_InputW / curRegionTensor.gridSize;
             m_OutputTensors.at(outputTensorCount).volume = curRegionTensor.gridSize
                 * curRegionTensor.gridSize
                 * (curRegionTensor.numBBoxes * (5 + curRegionTensor.numClasses));
-            std::string layerName = "region_" + std::to_string(i);
             curRegionTensor.blobName = layerName;
-            nvinfer1::plugin::RegionParameters RegionParameters{
-                static_cast<int>(curRegionTensor.numBBoxes), 4,
-                static_cast<int>(curRegionTensor.numClasses), nullptr};
-            std::string inputVol = dimsToString(previous->getDimensions());
-            nvinfer1::IPluginV2* regionPlugin
-                = createRegionPlugin(RegionParameters);
+
+            auto creator = getPluginRegistry()->getPluginCreator("Region_TRT", "1");
+
+            int num =  static_cast<int>(curRegionTensor.numBBoxes);
+            int coords = 4;
+            int classes = static_cast<int>(curRegionTensor.numClasses);
+            nvinfer1::PluginField fields[]{
+                {"num", &num,  nvinfer1::PluginFieldType::kINT32, 1},
+                {"coords", &coords,  nvinfer1::PluginFieldType::kINT32, 1},
+                {"classes", &classes,  nvinfer1::PluginFieldType::kINT32, 1},
+                {"smTree", nullptr,  nvinfer1::PluginFieldType::kINT32, 1}
+            };
+            nvinfer1::PluginFieldCollection pluginData;
+            pluginData.nbFields = 4;
+            pluginData.fields = fields;
+
+            nvinfer1::IPluginV2 *regionPlugin = creator->createPlugin(layerName.c_str(), &pluginData);
             assert(regionPlugin != nullptr);
             nvinfer1::IPluginV2Layer* region =
                 network.addPluginV2(&previous, 1, *regionPlugin);
             assert(region != nullptr);
-            region->setName(layerName.c_str());
+
+            std::string inputVol = dimsToString(previous->getDimensions());
             previous = region->getOutput(0);
             assert(previous != nullptr);
             previous->setName(layerName.c_str());
@@ -228,15 +240,23 @@ NvDsInferStatus Yolo::buildYoloNetwork(
             for (auto& anchor : curRegionTensor.anchors) anchor *= curRegionTensor.stride;
             ++outputTensorCount;
         } else if (m_ConfigBlocks.at(i).at("type") == "reorg") {
-            std::string inputVol = dimsToString(previous->getDimensions());
-            nvinfer1::IPluginV2* reorgPlugin = createReorgPlugin(2);
+            auto creator = getPluginRegistry()->getPluginCreator("Reorg_TRT", "1");
+
+
+            int stride = 2;
+            nvinfer1::PluginField strideField{"stride", &stride,  nvinfer1::PluginFieldType::kINT32, 1};
+            nvinfer1::PluginFieldCollection pluginData;
+            pluginData.nbFields = 1;
+            pluginData.fields = &strideField;
+
+            std::string layerName = "reorg_" + std::to_string(i);
+            nvinfer1::IPluginV2 *reorgPlugin = creator->createPlugin(layerName.c_str(), &pluginData);
             assert(reorgPlugin != nullptr);
             nvinfer1::IPluginV2Layer* reorg =
                 network.addPluginV2(&previous, 1, *reorgPlugin);
             assert(reorg != nullptr);
 
-            std::string layerName = "reorg_" + std::to_string(i);
-            reorg->setName(layerName.c_str());
+            std::string inputVol = dimsToString(previous->getDimensions());
             previous = reorg->getOutput(0);
             assert(previous != nullptr);
             std::string outputVol = dimsToString(previous->getDimensions());
