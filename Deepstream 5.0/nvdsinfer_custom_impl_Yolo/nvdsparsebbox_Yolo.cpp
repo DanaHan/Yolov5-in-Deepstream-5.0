@@ -156,8 +156,8 @@ static bool NvDsInferParseYoloV5(
 	    NvDsInferParseObjectInfo oinfo;        
         
 	    oinfo.classId = r.class_id;
-	    oinfo.left    = static_cast<unsigned int>(r.bbox[0]-r.bbox[2]*0.5f);
-	    oinfo.top     = static_cast<unsigned int>(r.bbox[1]-r.bbox[3]*0.5f);
+	    oinfo.left    = static_cast<unsigned int>(std::max(0.0f, r.bbox[0]-r.bbox[2]*0.5f));
+	    oinfo.top     = static_cast<unsigned int>(std::max(0.0f, r.bbox[1]-r.bbox[3]*0.5f));
 	    oinfo.width   = static_cast<unsigned int>(r.bbox[2]);
 	    oinfo.height  = static_cast<unsigned int>(r.bbox[3]);
 	    oinfo.detectionConfidence = r.conf;
@@ -193,8 +193,8 @@ static bool NvDsInferParseYoloV4(
 	    NvDsInferParseObjectInfo oinfo;        
         
 	    oinfo.classId = r.class_id;
-	    oinfo.left    = static_cast<unsigned int>(r.bbox[0]-r.bbox[2]*0.5f);
-	    oinfo.top     = static_cast<unsigned int>(r.bbox[1]-r.bbox[3]*0.5f);
+	    oinfo.left    = static_cast<unsigned int>(std::max(0.0f, r.bbox[0]-r.bbox[2]*0.5f));
+	    oinfo.top     = static_cast<unsigned int>(std::max(0.0f, r.bbox[1]-r.bbox[3]*0.5f));
 	    oinfo.width   = static_cast<unsigned int>(r.bbox[2]);
 	    oinfo.height  = static_cast<unsigned int>(r.bbox[3]);
 	    oinfo.detectionConfidence = r.conf;
